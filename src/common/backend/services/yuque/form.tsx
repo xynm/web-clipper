@@ -1,5 +1,7 @@
-import { Form, Input, Select } from 'antd';
-import { FormComponentProps } from 'antd/lib/form';
+import { Form } from '@ant-design/compatible';
+import '@ant-design/compatible/assets/index.less';
+import { Input, Select } from 'antd';
+import { FormComponentProps } from '@ant-design/compatible/lib/form';
 import React, { Component, Fragment } from 'react';
 import { YuqueBackendServiceConfig, RepositoryType } from './interface';
 import { FormattedMessage } from 'react-intl';
@@ -79,7 +81,7 @@ export default class extends Component<YuqueFormProps & FormComponentProps> {
             initialValue: initData.repositoryType,
             rules: [{ required: true, message: 'repositoryType is required!' }],
           })(
-            <Select disabled={editMode || verified}>
+            <Select>
               {RepositoryTypeOptions.map(o => (
                 <Select.Option key={o.key}>{o.label}</Select.Option>
               ))}

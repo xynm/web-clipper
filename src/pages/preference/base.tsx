@@ -2,25 +2,19 @@ import React from 'react';
 import { GlobalStore, DvaRouterProps } from '@/common/types';
 import { connect } from 'dva';
 import { List, Select, Switch } from 'antd';
-import {
-  asyncSetLocaleToStorage,
-  asyncSetShowLineNumber,
-  asyncSetEditorLiveRendering,
-} from '@/actions/userPreference';
+import { asyncSetLocaleToStorage, asyncSetEditorLiveRendering } from '@/actions/userPreference';
 import { FormattedMessage } from 'react-intl';
 import { locales } from '@/common/locales';
+import { useObserver } from 'mobx-react';
+import Container from 'typedi';
+import { IConfigService } from '@/service/common/config';
+import { IPreferenceService } from '@/service/common/preference';
 
-const mapStateToProps = ({
-  userPreference: { locale, showLineNumber, liveRendering },
-  version: { localVersion, remoteVersion, hasUpdate },
-}: GlobalStore) => {
+const mapStateToProps = ({ userPreference: { locale, liveRendering, iconColor } }: GlobalStore) => {
   return {
-    localVersion,
-    remoteVersion,
-    hasUpdate,
     locale,
-    showLineNumber,
     liveRendering,
+    iconColor,
   };
 };
 type PageStateProps = ReturnType<typeof mapStateToProps>;
@@ -29,7 +23,16 @@ type PageProps = PageStateProps & DvaRouterProps;
 
 const Base: React.FC<PageProps> = props => {
   const { dispatch } = props;
-  const configs = [
+
+  const { iconColor, preferenceService } = useObserver(() => {
+    const preferenceService = Container.get(IPreferenceService);
+    return {
+      preferenceService,
+      iconColor: preferenceService.userPreference.iconColor,
+    } as const;
+  });
+
+  const originConfigs = [
     {
       key: 'configLanguage',
       action: (
@@ -40,7 +43,9 @@ const Base: React.FC<PageProps> = props => {
           dropdownMatchSelectWidth={false}
         >
           {locales.map(o => (
-            <Select.Option key={o.locale}>{o.name}</Select.Option>
+            <Select.Option key={o.locale} value={o.locale}>
+              {o.name}
+            </Select.Option>
           ))}
         </Select>
       ),
@@ -51,35 +56,51 @@ const Base: React.FC<PageProps> = props => {
         <FormattedMessage
           id="preference.basic.configLanguage.description"
           defaultMessage="My native language is Chinese,Welcome to submit a translation on GitHub"
+          values={{
+            GitHub: (
+              <a
+                href="https://github.com/webclipper/web-clipper/tree/master/src/common/locales/data"
+                target="_blank"
+              >
+                GitHub
+              </a>
+            ),
+          }}
         />
       ),
     },
     {
-      key: 'showLineNumber',
+      key: 'iconColor',
       action: (
-        <Switch
-          checked={props.showLineNumber}
-          onChange={() => {
-            dispatch(
-              asyncSetShowLineNumber.started({
-                value: props.showLineNumber,
-              })
-            );
-          }}
-          key="showLineNumber"
-        />
+        <Select
+          key="configLanguage"
+          value={iconColor}
+          dropdownMatchSelectWidth={false}
+          onChange={preferenceService.updateIconColor}
+        >
+          {[
+            {
+              name: 'Dark',
+              value: 'dark',
+            },
+            {
+              name: 'Auto',
+              value: 'auto',
+            },
+            {
+              name: 'Light',
+              value: 'light',
+            },
+          ].map(o => (
+            <Select.Option key={o.value} value={o.value}>
+              {o.name}
+            </Select.Option>
+          ))}
+        </Select>
       ),
-      title: (
-        <FormattedMessage
-          id="preference.basic.showLineNumber.title"
-          defaultMessage="Show LineNumber"
-        />
-      ),
+      title: <FormattedMessage id="preference.basic.iconColor.title" defaultMessage="Icon Color" />,
       description: (
-        <FormattedMessage
-          id="preference.basic.showLineNumber.description"
-          defaultMessage="Enable Show LineNumber"
-        />
+        <FormattedMessage id="preference.basic.iconColor.description" defaultMessage="Icon Color" />
       ),
     },
     {
@@ -112,8 +133,13 @@ const Base: React.FC<PageProps> = props => {
     },
   ];
 
-  if (props.hasUpdate) {
-    configs.push({
+  const configService = Container.get(IConfigService);
+
+  const configs = useObserver(() => {
+    if (configService.isLatestVersion) {
+      return originConfigs;
+    }
+    return originConfigs.concat({
       key: 'update',
       action: (
         <a href="https://github.com/webclipper/web-clipper/releases" target="_blank">
@@ -128,7 +154,7 @@ const Base: React.FC<PageProps> = props => {
         />
       ),
     });
-  }
+  });
 
   return (
     <React.Fragment>

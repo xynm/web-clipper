@@ -2,18 +2,15 @@ import { ServiceMeta, ImageHostingServiceMeta } from '@/common/backend';
 
 export interface UserPreferenceStore {
   locale: string;
-  remoteVersion?: string;
   imageHosting: ImageHosting[];
-  showLineNumber: boolean;
   liveRendering: boolean;
+  iconColor: 'dark' | 'light' | 'auto';
   servicesMeta: {
     [type: string]: ServiceMeta;
   };
   imageHostingServicesMeta: {
     [type: string]: ImageHostingServiceMeta;
   };
-  iconfontUrl: string;
-  iconfontIcons: string[];
 }
 
 /**
@@ -37,3 +34,8 @@ export interface ImageClipperData {
 export type ClipperDataType = string | ImageClipperData;
 
 export const LOCAL_USER_PREFERENCE_LOCALE_KEY = 'local.userPreference.locale';
+
+/**
+ * user Access Tiken
+ */
+export const LOCAL_ACCESS_TOKEN_LOCALE_KEY = 'local.access.token.locale';

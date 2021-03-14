@@ -1,18 +1,20 @@
 import * as React from 'react';
-import * as styles from './index.scss';
+import styles from './index.less';
 import { Button } from 'antd';
 import Section from 'components/section';
-import { SerializedExtensionWithId } from '@web-clipper/extensions';
 import { FormattedMessage } from 'react-intl';
 import IconFont from '@/components/IconFont';
+import { IExtensionWithId } from '@/extensions/common';
+import localeService from '@/common/locales';
 
 type PageProps = {
-  extensions: SerializedExtensionWithId[];
+  hasEditor: boolean;
+  extensions: IExtensionWithId[];
   pathname: string;
   onClick(router: string): void;
 };
 
-const ClipExtensions: React.FC<PageProps> = ({ extensions, pathname, onClick }) => {
+const ClipExtensions: React.FC<PageProps> = ({ extensions, pathname, onClick, hasEditor }) => {
   const handleClick = (pluginRouter: string) => {
     if (pluginRouter !== pathname) {
       onClick(pluginRouter);
@@ -20,8 +22,8 @@ const ClipExtensions: React.FC<PageProps> = ({ extensions, pathname, onClick }) 
   };
   return (
     <Section
+      className={styles.section}
       title={<FormattedMessage id="tool.clipExtensions" defaultMessage="Clip Extensions" />}
-      line
     >
       {extensions.map(plugin => {
         const useThisPlugin = plugin.router === pathname;
@@ -40,6 +42,18 @@ const ClipExtensions: React.FC<PageProps> = ({ extensions, pathname, onClick }) 
           </Button>
         );
       })}
+      {hasEditor && (
+        <Button
+          block
+          key={'/editor'}
+          className={styles.menuButton}
+          style={pathname === '/editor' ? { color: '#40a9ff' } : {}}
+          onClick={() => handleClick('/editor')}
+        >
+          <IconFont type={'select'} />
+          {localeService.format({ id: 'contextMenus.selection.save.title' })}
+        </Button>
+      )}
     </Section>
   );
 };

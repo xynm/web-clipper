@@ -1,4 +1,4 @@
-import { TextExtension } from '@web-clipper/extensions';
+import { TextExtension } from '@/extensions/common';
 
 export default new TextExtension(
   {
@@ -12,11 +12,17 @@ export default new TextExtension(
   },
   {
     run: async context => {
-      const { turndown, Highlighter, toggleClipper } = context;
+      const { turndown, Highlighter, toggleClipper, $ } = context;
       toggleClipper();
       try {
         const data = await new Highlighter().start();
-        return turndown.turndown(data);
+        let container = document.createElement('div');
+        container.appendChild(
+          $(data)
+            .clone()
+            .get(0)
+        );
+        return turndown.turndown(container);
       } catch (error) {
         throw error;
       } finally {

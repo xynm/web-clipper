@@ -1,7 +1,7 @@
-import { ImageExtension } from '@web-clipper/extensions';
+import { TextExtension } from '@/extensions/common';
 import { SelectAreaPosition } from '@web-clipper/area-selector';
 
-export default new ImageExtension<SelectAreaPosition>(
+export default new TextExtension<SelectAreaPosition>(
   {
     name: 'Screenshots',
     icon: 'picture',
@@ -13,13 +13,14 @@ export default new ImageExtension<SelectAreaPosition>(
   {
     init: ({ currentImageHostingService }) => !!currentImageHostingService,
     run: async context => {
-      const { AreaSelector, toggleClipper } = context;
+      const { AreaSelector, toggleClipper, toggleLoading } = context;
       toggleClipper();
-      const response = new AreaSelector().start();
+      const response = await new AreaSelector().start();
+      toggleLoading();
       return response;
     },
     afterRun: async context => {
-      const { result, loadImage, captureVisibleTab } = context;
+      const { result, loadImage, captureVisibleTab, imageService } = context;
       const base64Capture = await captureVisibleTab();
       const img = await loadImage(base64Capture);
       let canvas: HTMLCanvasElement = document.createElement('canvas');
@@ -47,10 +48,14 @@ export default new ImageExtension<SelectAreaPosition>(
       canvas.height = sheight;
       canvas.width = swidth;
       ctx!.drawImage(img, sx, sy, swidth, sheight, 0, 0, swidth, sheight);
-      return { dataUrl: canvas.toDataURL(), width: swidth, height: sheight };
+      const url = await imageService!.uploadImage({
+        data: canvas.toDataURL(),
+      });
+      return `![](${url})\n\n`;
     },
     destroy: async context => {
-      const { toggleClipper } = context;
+      const { toggleClipper, toggleLoading } = context;
+      toggleLoading();
       toggleClipper();
     },
   }

@@ -22,6 +22,12 @@ const useFilterImageHostingServices = ({
   return imageHostingServices
     .map(o => {
       const meta = imageHostingServicesMap[o.type];
+      if (!meta) {
+        return null;
+      }
+      if (meta.builtIn && meta.type !== backendServiceType) {
+        return null;
+      }
       if (meta.support && !meta.support(backendServiceType)) {
         return null;
       }

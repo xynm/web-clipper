@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
+    "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "target": "esnext",
-    "module": "ESNext",
+    "target": "es2018",
+    "module": "esnext",
     "declaration": false,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "lib",
     "strict": true,
     "removeComments": true,

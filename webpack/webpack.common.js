@@ -3,19 +3,84 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const WebpackChromeReloaderPlugin = require('webpack-chrome-extension-reloader');
+const ExtensionReloader = require('webpack-extension-reloader');
 const tsImportPluginFactory = require('ts-import-plugin');
 const WebpackCreateExtensionManifestPlugin = require('webpack-create-extension-manifest-plugin');
+const fs = require('fs');
+const getVersion = require('./getVersion');
+
+const distFiles = fs.readdirSync(resolve('dist')).filter(o => o !== '.gitkeep');
 
 function resolve(dir) {
   return path.join(__dirname, '..', dir);
 }
 
+const packageJson = JSON.parse(fs.readFileSync(resolve('package.json'), 'utf8'));
+
+let manifestExtra = {
+  name: 'Web Clipper',
+  version: getVersion(packageJson.version),
+  permissions: [
+    'activeTab',
+    'storage',
+    'https://api.clipper.website/*',
+    'https://resource.clipper.website/*',
+    'contextMenus',
+  ],
+  commands: {
+    'toggle-feature-foo': {
+      suggested_key: {
+        default: 'Alt+S',
+      },
+      description: 'Test',
+    },
+  },
+  optional_permissions: ['cookies', '<all_urls>', 'webRequest', 'webRequestBlocking'],
+};
+
+let background = resolve('src/main/background.main.chrome.ts');
+let tool = resolve('src/main/tool.main.chrome.ts');
+
+if (process.env.TARGET_BROWSER === 'Firefox') {
+  manifestExtra = {
+    name: 'Web Clipper',
+    version: getVersion(packageJson.version),
+    commands: {
+      'toggle-feature-foo': {
+        suggested_key: {
+          default: 'Alt+S',
+        },
+        description: 'Test',
+      },
+    },
+    permissions: [
+      'contextMenus',
+      'activeTab',
+      'webRequest',
+      'webRequestBlocking',
+      'storage',
+      'https://api.clipper.website/*',
+      'https://resource.clipper.website/*',
+      'cookies',
+      '<all_urls>',
+    ],
+  };
+  if (process.env.FF_RELEASE !== 'true') {
+    manifestExtra.applications = {
+      gecko: {
+        id: 'web-clipper@web-clipper',
+      },
+    };
+  }
+  background = resolve('src/main/background.main.firefox.ts');
+  tool = resolve('src/main/tool.main.firefox.ts');
+}
+
 module.exports = {
   entry: {
-    background: resolve('src/browser/background/index.ts'),
-    tool: resolve('src/pages/app.tsx'),
-    content_script: resolve('src/browser/content/index.tsx'),
+    tool,
+    content_script: resolve('src/main/contentScript.main.ts'),
+    background,
   },
   output: {
     path: resolve('dist'),
@@ -25,9 +90,11 @@ module.exports = {
     splitChunks: {
       cacheGroups: {
         vendor: {
-          test: /[\\/]node_modules[\\/](react|react-dom|antd|lodash)[\\/]/,
+          test: /[\\/]node_modules[\\/](react\/|react-dom|antd|lodash|@ant-design)[\\/]/,
           name: 'vendor',
-          chunks: 'all',
+          chunks(chunk) {
+            return chunk.name !== 'background';
+          },
         },
       },
     },
@@ -41,7 +108,7 @@ module.exports = {
       pageActions: resolve('src/actions'),
       extensions: resolve('src/extensions/'),
     },
-    extensions: ['.ts', '.tsx', '.js', 'scss', 'less'],
+    extensions: ['.ts', '.tsx', '.js', 'less'],
   },
   module: {
     rules: [
@@ -83,10 +150,18 @@ module.exports = {
       },
       {
         test: /\.(png|jpg|gif)$/,
-        loader: 'url-loader?limit=1024000',
+        use: [
+          {
+            loader: 'url-loader',
+            options: {
+              limit: 8192,
+            },
+          },
+        ],
       },
       {
         test: /\.less$/,
+        include: /node_modules\/antd|@ant-design/,
         use: [
           {
             loader: 'style-loader',
@@ -97,17 +172,19 @@ module.exports = {
           {
             loader: 'less-loader',
             options: {
-              modifyVars: {
-                '@body-background': 'transparent',
+              lessOptions: {
+                modifyVars: {
+                  '@body-background': 'transparent',
+                },
+                javascriptEnabled: true,
               },
-              javascriptEnabled: true,
             },
           },
         ],
       },
       {
+        test: /\.less$/,
         exclude: /node_modules/,
-        test: [/\.scss$/, /\.css$/],
         use: [
           {
             loader: 'style-loader',
@@ -121,7 +198,15 @@ module.exports = {
             },
           },
           {
-            loader: 'sass-loader',
+            loader: 'less-loader',
+            options: {
+              lessOptions: {
+                modifyVars: {
+                  '@body-background': 'transparent',
+                },
+                javascriptEnabled: true,
+              },
+            },
           },
         ],
       },
@@ -129,7 +214,8 @@ module.exports = {
   },
   plugins: [
     process.env.NODE_ENV === 'development'
-      ? new WebpackChromeReloaderPlugin({
+      ? new ExtensionReloader({
+          port: 9091,
           reloadPage: false,
           entries: {
             contentScript: 'content_script',
@@ -141,11 +227,19 @@ module.exports = {
       $: 'jquery',
       jQuery: 'jquery',
     }),
-    new CleanWebpackPlugin(['dist'], {
-      root: path.resolve(__dirname, '../'),
-      verbose: true,
-    }),
+    new CleanWebpackPlugin(
+      distFiles.map(p => `dist/${p}`),
+      {
+        root: path.resolve(__dirname, '../'),
+        verbose: true,
+      }
+    ),
     new CopyWebpackPlugin([
+      {
+        from: resolve('chrome/js'),
+        to: resolve('dist'),
+        ignore: ['.*'],
+      },
       {
         from: resolve('chrome/icons'),
         to: resolve('dist'),
@@ -154,7 +248,7 @@ module.exports = {
     ]),
     new WebpackCreateExtensionManifestPlugin({
       output: resolve('dist/manifest.json'),
-      extra: { name: 'Web Clipper' },
+      extra: manifestExtra,
     }),
     new HtmlWebpackPlugin({
       title: 'Web Clipper',

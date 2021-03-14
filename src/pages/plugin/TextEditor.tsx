@@ -3,11 +3,12 @@ import { bindActionCreators, Dispatch } from 'redux';
 import { connect } from 'dva';
 import { changeData } from 'pageActions/clipper';
 import { asyncRunExtension } from 'pageActions/userPreference';
-import { SerializedExtensionWithId } from '@web-clipper/extensions';
 import * as HyperMD from 'hypermd';
 import { EditorContainer } from 'components/container';
 import { isUndefined } from 'common/object';
 import { GlobalStore } from 'common/types';
+import { IExtensionWithId } from '@/extensions/common';
+import { parse } from 'qs';
 
 const useActions = {
   asyncRunExtension: asyncRunExtension.started,
@@ -16,34 +17,63 @@ const useActions = {
 
 const mapStateToProps = ({
   clipper: { clipperData },
-  userPreference: { liveRendering, showLineNumber },
+  userPreference: { liveRendering },
 }: GlobalStore) => {
   return {
     liveRendering,
-    showLineNumber,
     clipperData,
   };
 };
 type PageOwnProps = {
   pathname: string;
-  extension: SerializedExtensionWithId;
+  search?: string;
+  extension: IExtensionWithId | null;
 };
 type PageProps = ReturnType<typeof mapStateToProps> & typeof useActions & PageOwnProps;
 
 const editorId = 'DiamondYuan_Love_LJ';
 
-class ClipperPluginPage extends React.Component<PageProps> {
+class ClipperPluginPage extends React.Component<PageProps, { markdown: string }> {
   private myCodeMirror: any;
 
+  constructor(props: any) {
+    super(props);
+    this.state = {
+      markdown: '',
+    };
+  }
+
   checkExtension = () => {
-    const { extension, clipperData, pathname } = this.props;
+    const { extension, clipperData, pathname, search } = this.props;
     const data = clipperData[pathname];
-    // eslint-disable-next-line no-undefined
-    if (isUndefined(data)) {
+    if (isUndefined(data) && extension) {
       this.props.asyncRunExtension({
         pathname,
         extension,
       });
+    }
+    if (isUndefined(data) && search) {
+      const content = parse(search.slice(1));
+      this.props.changeData({
+        data: content.markdown || '',
+        pathName: this.props.pathname,
+      });
+      this.setState({
+        markdown: (content.markdown as string) || '',
+      });
+      return content.markdown || '';
+    }
+    if (search && !isUndefined(data)) {
+      const content = parse(search.slice(1));
+      if (content.markdown !== this.state.markdown) {
+        this.setState({
+          markdown: (content.markdown as string) || '',
+        });
+        this.props.changeData({
+          data: (content.markdown as string) || '',
+          pathName: this.props.pathname,
+        });
+      }
     }
     return data || '';
   };
@@ -54,7 +84,12 @@ class ClipperPluginPage extends React.Component<PageProps> {
       const value = this.myCodeMirror.getValue();
       if (data !== value) {
         try {
-          this.myCodeMirror.setValue(data);
+          const that = this;
+          setTimeout(() => {
+            that.myCodeMirror.setValue(data);
+            that.myCodeMirror.focus();
+            that.myCodeMirror.setCursor(that.myCodeMirror.lineCount(), 0);
+          }, 10);
         } catch (_error) {}
       }
     }
@@ -64,7 +99,7 @@ class ClipperPluginPage extends React.Component<PageProps> {
     const data = this.checkExtension();
     let myTextarea = document.getElementById(editorId) as HTMLTextAreaElement;
     this.myCodeMirror = HyperMD.fromTextArea(myTextarea, {
-      lineNumbers: !!this.props.showLineNumber,
+      lineNumbers: false,
       hmdModeLoader: false,
     });
     if (this.myCodeMirror) {
@@ -96,8 +131,6 @@ class ClipperPluginPage extends React.Component<PageProps> {
   }
 }
 
-export default connect(
-  mapStateToProps,
-  (dispatch: Dispatch) =>
-    bindActionCreators<typeof useActions, typeof useActions>(useActions, dispatch)
+export default connect(mapStateToProps, (dispatch: Dispatch) =>
+  bindActionCreators<typeof useActions, typeof useActions>(useActions, dispatch)
 )(ClipperPluginPage as React.ComponentType<PageProps>);

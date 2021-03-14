@@ -1,24 +1,39 @@
 import * as React from 'react';
-import * as styles from './index.scss';
+import styles from './index.less';
 import Account from './account';
 import ImageHosting from './imageHosting';
 import Extensions from './extensions';
 import { CenterContainer } from 'components/container';
 import { router, connect } from 'dva';
-import { Tabs, Icon, Badge } from 'antd';
+
+import {
+  CloseOutlined,
+  PictureOutlined,
+  ToolOutlined,
+  UserOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
+
+import { Tabs, Badge, message } from 'antd';
 import { FormattedMessage } from 'react-intl';
 import Base from './base';
 import { DvaRouterProps, GlobalStore } from '@/common/types';
 import Changelog from './changelog';
 import IconFont from '@/components/IconFont';
+import Powerpack from './powerpack';
+import Privacy from './privacy';
+import locale from '@/common/locales';
+import Container from 'typedi';
+import { IConfigService } from '@/service/common/config';
+import { useObserver } from 'mobx-react';
 
 const { Route } = router;
 
 const TabPane = Tabs.TabPane;
 
-const mapStateToProps = ({ version: { hasUpdate } }: GlobalStore) => {
+const mapStateToProps = ({ account: { accounts } }: GlobalStore) => {
   return {
-    hasUpdate,
+    accounts,
   };
 };
 type PageStateProps = ReturnType<typeof mapStateToProps>;
@@ -26,29 +41,41 @@ type PageStateProps = ReturnType<typeof mapStateToProps>;
 const tabs = [
   {
     path: 'account',
-    icon: <Icon type="user" />,
+    icon: <UserOutlined />,
     title: <FormattedMessage id="preference.tab.account" defaultMessage="Account" />,
     component: Account,
   },
   {
     path: 'extensions',
 
-    icon: <Icon type="tool" />,
+    icon: <ToolOutlined />,
     title: <FormattedMessage id="preference.tab.extensions" defaultMessage="Extension" />,
     component: Extensions,
   },
   {
     path: 'imageHost',
-    icon: <Icon type="picture" />,
+    icon: <PictureOutlined />,
 
     title: <FormattedMessage id="preference.tab.imageHost" defaultMessage="ImageHost" />,
     component: ImageHosting,
   },
   {
     path: 'base',
-    icon: <Icon type="setting" />,
+    icon: <SettingOutlined />,
     title: <FormattedMessage id="preference.tab.basic" defaultMessage="Basic" />,
     component: Base,
+  },
+  {
+    path: 'powerpack',
+    icon: <IconFont type="powerpack" />,
+    title: <FormattedMessage id="preference.tab.powerpack" defaultMessage="Powerpack" />,
+    component: Powerpack,
+  },
+  {
+    path: 'privacy',
+    icon: <IconFont type="privacy" />,
+    title: <FormattedMessage id="preference.tab.privacy" defaultMessage="Privacy policy" />,
+    component: Privacy,
   },
   {
     path: 'changelog',
@@ -63,15 +90,30 @@ type PageProps = DvaRouterProps & PageStateProps;
 const Preference: React.FC<PageProps> = ({
   location: { pathname },
   history: { push },
-  hasUpdate,
+  accounts,
 }) => {
-  const goHome = () => push('/');
+  const goHome = () => {
+    if (accounts.length === 0) {
+      message.error(
+        locale.format({
+          id: 'preference.bind.message',
+          defaultMessage: 'You need to bind an account before you can use it.',
+        })
+      );
+      return;
+    }
+    push('/');
+  };
+
+  const configService = Container.get(IConfigService);
+
+  const isLatestVersion = useObserver(() => configService.isLatestVersion);
 
   return (
     <CenterContainer>
       <div className={styles.mainContent}>
         <div onClick={goHome} className={styles.closeIcon}>
-          <Icon type="close" />
+          <CloseOutlined />
         </div>
         <div style={{ background: 'white', height: '100%' }}>
           <Tabs activeKey={pathname} tabPosition="left" style={{ height: '100%' }} onChange={push}>
@@ -83,7 +125,7 @@ const Preference: React.FC<PageProps> = ({
                   {tab.title}
                 </div>
               );
-              if (hasUpdate && tab.path === 'base') {
+              if (!isLatestVersion && tab.path === 'base') {
                 tabTitle = <Badge dot>{tabTitle}</Badge>;
               }
               return (

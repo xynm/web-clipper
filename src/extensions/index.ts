@@ -1,15 +1,24 @@
-import { SerializedExtensionWithId } from '@web-clipper/extensions';
+import { IExtensionWithId } from './common';
+import { IContextMenuExtensionFactory } from './contextMenus';
 
-const context = require.context('./extensions', true, /\.[t|j]s$/);
+const context = require.context('./extensions', true, /\.(ts|tsx)$/);
 
-export const extensions: SerializedExtensionWithId[] = context.keys().map(key => {
-  const id = key.slice(2, key.length - 3);
+const contextMenusContext = require.context('./contextMenus', true, /\.(ts|tsx)$/);
+
+export const contextMenus = contextMenusContext.keys().map(key => {
+  const ContextMenuExtensionFactory: IContextMenuExtensionFactory = contextMenusContext(key)
+    .default;
   return {
-    ...context(key).default.serialize(),
-    id,
-    router: `/plugins/${id}`,
-    embedded: true,
+    id: ContextMenuExtensionFactory.id,
+    contextMenu: ContextMenuExtensionFactory,
   };
 });
 
-export default context;
+export const extensions: IExtensionWithId[] = context.keys().map(key => {
+  const id = key.slice(2, key.length - 3);
+  return {
+    ...context(key).default,
+    id,
+    router: `/plugins/${id}`,
+  };
+});

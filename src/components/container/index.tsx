@@ -1,15 +1,14 @@
-import * as React from 'react';
-import * as styles from './index.scss';
-import { Icon } from 'antd';
+import React from 'react';
+import styles from './index.less';
+import { CloseOutlined } from '@ant-design/icons';
 
-export default class Container extends React.Component {
-  public render() {
-    return <div className={styles.mainContainer}>{this.props.children}</div>;
-  }
-}
+const Container: React.FC = ({ children }) => {
+  return <div className={styles.mainContainer}>{children}</div>;
+};
 
-interface ToolContainerProps {
+export interface ToolContainerProps {
   onClickCloseButton?: () => void;
+  onClickMask?: () => void;
 }
 
 export class ToolContainer extends React.Component<ToolContainerProps> {
@@ -19,32 +18,33 @@ export class ToolContainer extends React.Component<ToolContainerProps> {
     }
   };
 
+  handleClickMask = () => {
+    if (this.props.onClickMask) {
+      this.props.onClickMask();
+    }
+  };
+
   public render() {
     return (
-      <Container>
-        <div className={styles.toolContainer}>
-          <div className={styles.closeButton} onClick={this.onClickCloseButton}>
-            <Icon type="close" />
+      <React.Fragment>
+        <div className={styles.mask} onClick={this.handleClickMask}></div>
+        <Container>
+          <div className={styles.toolContainer}>
+            <div className={styles.closeButton} onClick={this.onClickCloseButton}>
+              <CloseOutlined />
+            </div>
+            {<div>{this.props.children}</div>}
           </div>
-          {<div>{this.props.children}</div>}
-        </div>
-      </Container>
+        </Container>
+      </React.Fragment>
     );
   }
 }
 
-export class CenterContainer extends React.Component {
-  public render() {
-    return <div className={styles.centerContainer}>{this.props.children}</div>;
-  }
-}
+export const CenterContainer: React.FC = ({ children }) => {
+  return <div className={styles.centerContainer}>{children}</div>;
+};
 
-export class EditorContainer extends React.Component {
-  public render() {
-    return (
-      <Container>
-        <div className={styles.editorContainer}>{this.props.children}</div>
-      </Container>
-    );
-  }
-}
+export const EditorContainer: React.FC = ({ children }) => {
+  return <div className={styles.editorContainer}>{children}</div>;
+};

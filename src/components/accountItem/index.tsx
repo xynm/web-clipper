@@ -1,7 +1,9 @@
 import * as React from 'react';
-import { Button, Icon } from 'antd';
-import * as styles from './index.scss';
+import { StarOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
+import styles from './index.less';
 import { FormattedMessage } from 'react-intl';
+import IconAvatar from '@/components/avatar';
 
 interface PageProps {
   isDefault: boolean;
@@ -36,10 +38,10 @@ export default class Page extends React.Component<PageProps> {
     return (
       <div className={styles.card}>
         <div className={styles.star}>
-          <Icon type="star" style={tagStyle} onClick={this.handleSetDefaultAccount} />
+          <StarOutlined style={tagStyle} onClick={this.handleSetDefaultAccount} />
         </div>
         <div className={styles.userInfo}>
-          <img className={styles.avatar} src={avatar} />
+          <IconAvatar size={96} avatar={avatar} icon={avatar} />
           <div className={styles.name}>{name}</div>
           <div className={styles.description}>{description}</div>
         </div>
@@ -50,11 +52,8 @@ export default class Page extends React.Component<PageProps> {
               defaultMessage="Edit"
             ></FormattedMessage>
           </Button>
-          <Button type="danger" onClick={this.handleDelete}>
-            <FormattedMessage
-              id="component.accountItem.delete"
-              defaultMessage="Delete"
-            ></FormattedMessage>
+          <Button type="primary" danger onClick={this.handleDelete}>
+            <FormattedMessage id="component.accountItem.delete" defaultMessage="Delete" />
           </Button>
         </div>
       </div>

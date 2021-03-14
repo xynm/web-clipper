@@ -1,24 +1,29 @@
-import React, { useMemo } from 'react';
-import { Icon } from 'antd';
-import { IconProps } from 'antd/lib/icon';
-import { useSelector } from 'dva';
-import { GlobalStore } from '@/common/types';
+import React from 'react';
+import { Icon as LegacyIcon } from '@ant-design/compatible';
+import { IconProps } from '@ant-design/compatible/es/icon';
+import { createFromIconfontCN } from '@ant-design/icons';
+import Container from 'typedi';
+import { IConfigService } from '@/service/common/config';
+import { Observer, useObserver } from 'mobx-react';
 
 const IconFont: React.FC<IconProps> = props => {
-  const { scriptUrl, iconfontIcons } = useSelector(
-    ({ userPreference: { iconfontUrl, iconfontIcons } }: GlobalStore) => ({
-      scriptUrl: iconfontUrl,
-      iconfontIcons,
-    })
+  const configService = Container.get(IConfigService);
+  const IconFont = useObserver(() => {
+    return createFromIconfontCN({ scriptUrl: 'icon.js' });
+  });
+  return (
+    <Observer>
+      {() => {
+        if (!configService.remoteIconSet.has(props.type)) {
+          return <LegacyIcon {...props} />;
+        }
+        if (!props.type) {
+          throw new Error('Type is required');
+        }
+        return <IconFont {...props} type={props.type!} />;
+      }}
+    </Observer>
   );
-  const iconsSet = useMemo(() => {
-    return new Set(iconfontIcons);
-  }, [iconfontIcons]);
-  if (!iconsSet.has(props.type!)) {
-    return <Icon {...props}></Icon>;
-  }
-  const IconFont = Icon.createFromIconfontCN({ scriptUrl });
-  return <IconFont {...props}></IconFont>;
 };
 
 export default IconFont;

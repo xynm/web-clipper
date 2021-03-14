@@ -1,15 +1,22 @@
-import { ImageHostingWithMeta } from './../common/hooks/useFilterImageHostingServices';
+import { ImageHostingWithMeta } from '@/common/hooks/useFilterImageHostingServices';
 import Select, { SelectProps } from 'antd/lib/select';
 import React, { forwardRef } from 'react';
-import styles from './ImageHostingSelect.scss';
-import ImageHostingSelectOption from 'components/imageHostingSelectOption';
+import ImageHostingSelectOption from '@/components/imageHostingSelectOption';
+import styles from './ImageHostingSelect.less';
 
-export const ImageHostingSelect: React.FC<
-  {
-    supportedImageHostingServices: ImageHostingWithMeta[];
-  } & SelectProps
-> = ({ supportedImageHostingServices, ...props }, ref) => (
-  <Select className={styles.imageHostingSelect} {...props} ref={ref}>
+interface ImageHostingSelectProps extends SelectProps<string> {
+  supportedImageHostingServices: ImageHostingWithMeta[];
+}
+
+/**
+ * TODO
+ * fix any
+ */
+export const ImageHostingSelect: React.ForwardRefRenderFunction<any, ImageHostingSelectProps> = (
+  { supportedImageHostingServices, ...props },
+  ref
+) => (
+  <Select allowClear className={styles.imageHostingSelect} {...props} ref={ref}>
     {supportedImageHostingServices.map(({ imageHostingServices: { id, remark }, meta }) => {
       return (
         <Select.Option key={id} value={id}>
@@ -20,4 +27,8 @@ export const ImageHostingSelect: React.FC<
   </Select>
 );
 
-export default forwardRef(ImageHostingSelect);
+/**
+ * TODO
+ * fix any
+ */
+export default forwardRef<any, ImageHostingSelectProps>(ImageHostingSelect);

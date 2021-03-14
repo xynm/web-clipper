@@ -1,61 +1,27 @@
 import { CompleteStatus, UnauthorizedError } from './../interface';
-import { DocumentService, Repository, CreateDocumentRequest } from '../../index';
+import { DocumentService, CreateDocumentRequest } from '../../index';
 import axios, { AxiosInstance } from 'axios';
 import { generateUuid } from '@web-clipper/shared/lib/uuid';
 import localeService from '@/common/locales';
+import { NotionRepository, NotionUserContent } from './types';
+import { IWebRequestService } from '@/service/common/webRequest';
+import Container from 'typedi';
+import { ICookieService } from '@/service/common/cookie';
 
-interface NotionUserContent {
-  recordMap: {
-    notion_user: {
-      [uuid: string]: {
-        role: string;
-        value: {
-          id: string;
-          email: string;
-          given_name: string;
-          family_name: string;
-          profile_photo: string;
-        };
-      };
-    };
-    space: {
-      [id: string]: {
-        role: string;
-        value: {
-          id: string;
-          name: string;
-          domain: string;
-          pages: string[];
-        };
-      };
-    };
-    block: {
-      [uuid: string]: {
-        role: string;
-        value: {
-          id: string;
-          version: string;
-          parent_id: string;
-          type: string;
-          created_time: number;
-          properties: {
-            title: string[][];
-            content: string[];
-          };
-        };
-      };
-    };
-  };
-}
+const PAGE = 'page';
+const COLLECTION_VIEW_PAGE = 'collection_view_page';
+const origin = 'https://www.notion.so/';
 
 export default class NotionDocumentService implements DocumentService {
   private request: AxiosInstance;
-  private repositories: Repository[];
+  private repositories: NotionRepository[];
   private userContent?: NotionUserContent;
+  private webRequestService: IWebRequestService;
+  private cookieService: ICookieService;
 
   constructor() {
     const request = axios.create({
-      baseURL: 'https://www.notion.so/',
+      baseURL: origin,
       timeout: 10000,
       transformResponse: [
         (data): any => {
@@ -66,6 +32,8 @@ export default class NotionDocumentService implements DocumentService {
     });
     this.request = request;
     this.repositories = [];
+    this.webRequestService = Container.get(IWebRequestService);
+    this.cookieService = Container.get(ICookieService);
     this.request.interceptors.response.use(
       r => r,
       error => {
@@ -110,20 +78,47 @@ export default class NotionDocumentService implements DocumentService {
 
     const spaces = this.userContent.recordMap.space;
     const blocks = this.userContent.recordMap.block;
+    const collections = this.userContent.recordMap.collection;
+
     if (!blocks) {
       this.repositories = [];
       return [];
     }
-    const result = Object.values(blocks)
-      .filter(({ value }) => !!value.properties && !!spaces[value.parent_id])
-      .map(
-        ({ value }): Repository => ({
+
+    const result: NotionRepository[] = [];
+    Object.values(blocks).forEach(({ value }) => {
+      if (
+        value.type === PAGE &&
+        !!value.properties &&
+        !!value.properties.title &&
+        !!spaces[value.parent_id]
+      ) {
+        result.push({
           id: value.id,
           name: value.properties.title.toString(),
           groupId: spaces[value.parent_id].value.domain,
           groupName: spaces[value.parent_id].value.name,
-        })
-      );
+          pageType: PAGE,
+        });
+      }
+
+      if (
+        value.type === COLLECTION_VIEW_PAGE &&
+        !!value.collection_id &&
+        !!collections[value.collection_id] &&
+        !!collections[value.collection_id].value &&
+        !!collections[value.collection_id].value.name &&
+        !!spaces[value.parent_id]
+      ) {
+        result.push({
+          id: collections[value.collection_id].value.id,
+          name: collections[value.collection_id].value.name.toString(),
+          groupId: spaces[value.parent_id].value.domain,
+          groupName: spaces[value.parent_id].value.name,
+          pageType: COLLECTION_VIEW_PAGE,
+        });
+      }
+    });
 
     this.repositories = result;
 
@@ -136,14 +131,20 @@ export default class NotionDocumentService implements DocumentService {
     content,
   }: CreateDocumentRequest): Promise<CompleteStatus> => {
     let fileName = `${title}.md`;
-    const documentId = await this.createEmptyFile(repositoryId, content);
+
+    const repository = this.repositories.find(o => o.id === repositoryId);
+    if (!repository) {
+      throw new Error('Illegal repository');
+    }
+
+    const documentId = await this.createEmptyFile(repository, content);
     const fileUrl = await this.getFileUrl(fileName);
     await axios.put(fileUrl.signedPutUrl, `${content}`, {
       headers: {
         'Content-Type': 'text/markdown',
       },
     });
-    await this.request.post('api/v3/enqueueTask', {
+    await this.requestWithCookie.post('api/v3/enqueueTask', {
       task: {
         eventName: 'importFile',
         request: {
@@ -154,24 +155,23 @@ export default class NotionDocumentService implements DocumentService {
         },
       },
     });
-    const repository = this.repositories.find(o => o.id === repositoryId);
-    if (!repository) {
-      throw new Error('Illegal repository');
-    }
+
     return {
       href: `https://www.notion.so/${repository.groupId}/${documentId.replace(/-/g, '')}`,
     };
   };
 
-  createEmptyFile = async (parentId: string, title: string) => {
+  createEmptyFile = async (repository: NotionRepository, title: string) => {
     if (!this.userContent) {
       this.userContent = await this.getUserContent();
     }
     const documentId = generateUuid();
+    const parentId = repository.id;
     const userId = Object.values(this.userContent.recordMap.notion_user)[0].value.id;
     const time = new Date().getDate();
-    await this.request.post('api/v3/submitTransaction', {
-      operations: [
+    let operations;
+    if (repository.pageType === PAGE) {
+      operations = [
         {
           id: documentId,
           table: 'block',
@@ -234,13 +234,42 @@ export default class NotionDocumentService implements DocumentService {
           command: 'update',
           args: { last_edited_time: time },
         },
-      ],
+      ];
+    } else if (repository.pageType === COLLECTION_VIEW_PAGE) {
+      operations = [
+        {
+          id: documentId,
+          table: 'block',
+          path: [],
+          command: 'set',
+          args: {
+            type: 'page',
+            id: documentId,
+            version: 1,
+          },
+        },
+        {
+          id: documentId,
+          table: 'block',
+          path: [],
+          command: 'update',
+          args: {
+            parent_id: parentId,
+            parent_table: 'collection',
+            alive: true,
+          },
+        },
+      ];
+    }
+
+    await this.requestWithCookie.post('api/v3/submitTransaction', {
+      operations,
     });
     return documentId;
   };
 
   getFileUrl = async (fileName: string) => {
-    const result = await this.request.post<{
+    const result = await this.requestWithCookie.post<{
       url: string;
       signedPutUrl: string;
     }>('api/v3/getUploadFileUrl', {
@@ -252,7 +281,47 @@ export default class NotionDocumentService implements DocumentService {
   };
 
   private getUserContent = async () => {
-    const response = await this.request.post<NotionUserContent>('api/v3/loadUserContent');
+    const response = await this.requestWithCookie.post<NotionUserContent>('api/v3/loadUserContent');
     return response.data;
   };
+
+  /**
+   * Modify the cookie when request
+   */
+  private get requestWithCookie() {
+    const post = async <T>(url: string, data?: any) => {
+      const cookies = await this.cookieService.getAll({
+        url: origin,
+      });
+      const cookieString = cookies.map(o => `${o.name}=${o.value}`).join(';');
+      const header = await this.webRequestService.startChangeHeader({
+        urls: [`${origin}*`],
+        requestHeaders: [
+          {
+            name: 'cookie',
+            value: cookieString,
+          },
+          {
+            name: `Content-Type`,
+            value: 'application/json',
+          },
+        ],
+      });
+      try {
+        const result = await this.request.post<T>(url, data, {
+          headers: {
+            [header.name]: header.value,
+          },
+        });
+        await this.webRequestService.end(header);
+        return result;
+      } catch (error) {
+        await this.webRequestService.end(header);
+        throw error;
+      }
+    };
+    return {
+      post,
+    };
+  }
 }

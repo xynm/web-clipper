@@ -2,16 +2,19 @@ import * as React from 'react';
 import {
   asyncAddAccount,
   asyncDeleteAccount,
-  asyncUpdateCurrentAccountId,
+  asyncUpdateDefaultAccountId,
   asyncUpdateAccount,
 } from 'pageActions/account';
-import { Icon, Button, Form, Row, Col } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { Form } from '@ant-design/compatible';
+import '@ant-design/compatible/assets/index.less';
+import { Button, Row, Col } from 'antd';
 import { bindActionCreators, Dispatch } from 'redux';
 import { connect } from 'dva';
 import AccountItem from '../../../components/accountItem';
-import * as styles from './index.scss';
+import styles from './index.less';
 import EditAccountModal from './modal/editAccountModal';
-import { FormComponentProps } from 'antd/lib/form';
+import { FormComponentProps } from '@ant-design/compatible/lib/form';
 import CreateAccountModal from './modal/createAccountModal';
 import { GlobalStore, AccountPreference } from 'common/types';
 import { FormattedMessage } from 'react-intl';
@@ -21,7 +24,7 @@ const useActions = {
   asyncAddAccount: asyncAddAccount.started,
   asyncDeleteAccount: asyncDeleteAccount.started,
   asyncUpdateAccount: asyncUpdateAccount,
-  asyncUpdateCurrentAccountId: asyncUpdateCurrentAccountId.started,
+  asyncUpdateDefaultAccountId: asyncUpdateDefaultAccountId.started,
   asyncChangeAccount: asyncChangeAccount.started,
 };
 
@@ -63,7 +66,7 @@ class Page extends React.Component<PageProps, PageState> {
     if (this.props.defaultAccountId === id) {
       return;
     }
-    this.props.asyncUpdateCurrentAccountId({ id });
+    this.props.asyncUpdateDefaultAccountId({ id });
   };
 
   handleEdit = (accountId: string) => {
@@ -74,7 +77,7 @@ class Page extends React.Component<PageProps, PageState> {
     this.toggleAccountModal(currentAccount);
   };
 
-  handleAdd = (userInfo: any) => {
+  handleAdd = (id: string, userInfo: any) => {
     const { form } = this.props;
     form.validateFields((error, values) => {
       if (error) {
@@ -82,6 +85,7 @@ class Page extends React.Component<PageProps, PageState> {
       }
       const { type, defaultRepositoryId, imageHosting, ...info } = values;
       this.props.asyncAddAccount({
+        id,
         type,
         defaultRepositoryId,
         imageHosting,
@@ -112,8 +116,8 @@ class Page extends React.Component<PageProps, PageState> {
     );
   };
 
-  handleEditAccount = (id: string) => {
-    const { form, asyncUpdateAccount, currentAccountId } = this.props;
+  handleEditAccount = (id: string, userInfo: any, newId: string) => {
+    const { form, asyncUpdateAccount } = this.props;
     form.validateFields((error, values) => {
       if (error) {
         return;
@@ -122,11 +126,10 @@ class Page extends React.Component<PageProps, PageState> {
       asyncUpdateAccount({
         account: { type, defaultRepositoryId, imageHosting, info },
         id,
+        newId,
+        userInfo,
         callback: () => {
           this.handleCancel();
-          if (currentAccountId === id) {
-            this.props.asyncChangeAccount({ id });
-          }
         },
       });
     });
@@ -167,7 +170,7 @@ class Page extends React.Component<PageProps, PageState> {
   };
 
   render() {
-    const { defaultAccountId, accounts, asyncDeleteAccount } = this.props;
+    const { defaultAccountId, accounts, asyncDeleteAccount, servicesMeta } = this.props;
     const { handleEdit, handleSetDefaultId, toggleAccountModal } = this;
     return (
       <React.Fragment>
@@ -180,7 +183,7 @@ class Page extends React.Component<PageProps, PageState> {
                 id={account.id}
                 name={account.name}
                 description={account.description}
-                avatar={account.avatar}
+                avatar={account.avatar || servicesMeta[account.type].icon}
                 onDelete={id => asyncDeleteAccount({ id })}
                 onEdit={id => handleEdit(id)}
                 onSetDefaultAccount={id => handleSetDefaultId(id)}
@@ -195,11 +198,8 @@ class Page extends React.Component<PageProps, PageState> {
                 onClick={() => toggleAccountModal()}
                 block
               >
-                <Icon type="plus" />
-                <FormattedMessage
-                  id="preference.account.add"
-                  defaultMessage="Bind Account"
-                ></FormattedMessage>
+                <PlusOutlined />
+                <FormattedMessage id="preference.account.add" defaultMessage="Bind Account" />
               </Button>
             </div>
           </Col>
@@ -209,7 +209,4 @@ class Page extends React.Component<PageProps, PageState> {
   }
 }
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(Form.create<PageProps>()(Page));
+export default connect(mapStateToProps, mapDispatchToProps)(Form.create<PageProps>()(Page));

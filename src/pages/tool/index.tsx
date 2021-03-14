@@ -1,71 +1,60 @@
-import React, { useEffect } from 'react';
-import * as styles from './index.scss';
+import React, { useEffect, useMemo, useCallback } from 'react';
+import styles from './index.less';
 import ClipExtension from './ClipExtension';
-import repositorySelectOptions from 'components/repositorySelectOptions';
 import ToolExtensions from './toolExtensions';
-import { Avatar, Button, Icon, Input, Select, Badge } from 'antd';
+import { CaretDownOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, Badge, Dropdown, Menu } from 'antd';
 import { connect, routerRedux } from 'dva';
 import { GlobalStore } from '@/common/types';
 import { isEqual } from 'lodash';
 import { ToolContainer } from 'components/container';
-import {
-  asyncCreateDocument,
-  updateTitle,
-  selectRepository,
-  asyncChangeAccount,
-} from 'pageActions/clipper';
-import { asyncHideTool, asyncRunExtension } from 'pageActions/userPreference';
-import { SerializedExtensionWithId, InitContext } from '@web-clipper/extensions';
+import { selectRepository, asyncChangeAccount } from 'pageActions/clipper';
+import { asyncRunExtension } from 'pageActions/userPreference';
+import { InitContext } from '@web-clipper/extensions';
 import Section from 'components/section';
 import { DvaRouterProps } from 'common/types';
 import useFilterExtensions from '@/common/hooks/useFilterExtensions';
 import { FormattedMessage } from 'react-intl';
-import { trackEvent } from '@/common/gs';
 import matchUrl from '@/common/matchUrl';
+import Header from './Header';
+import RepositorySelect from '@/components/RepositorySelect';
+import Container from 'typedi';
+import { IConfigService } from '@/service/common/config';
+import { Observer, useObserver } from 'mobx-react';
+import IconAvatar from '@/components/avatar';
+import UserItem from '@/components/userItem';
+import { IContentScriptService } from '@/service/common/contentScript';
+import { IExtensionService, IExtensionContainer } from '@/service/common/extension';
+import { IExtensionWithId } from '@/extensions/common';
+import usePowerpack from '@/common/hooks/usePowerpack';
 
 const mapStateToProps = ({
   clipper: {
     currentAccountId,
-    title,
     url,
     currentRepository,
     repositories,
     currentImageHostingService,
+    clipperData,
   },
   loading,
-  account: { accounts, defaultAccountId },
-  userPreference: { locale },
-  extension: { extensions, disabledExtensions },
-  version: { hasUpdate },
+  account: { accounts },
+  userPreference: { locale, servicesMeta },
 }: GlobalStore) => {
   const currentAccount = accounts.find(o => o.id === currentAccountId);
-  const creatingDocument = loading.effects[asyncCreateDocument.started.type];
-  const disableCreateDocument = creatingDocument;
   const loadingAccount = loading.effects[asyncChangeAccount.started.type];
   return {
-    defaultAccountId,
-    hasUpdate,
+    hasEditor: typeof clipperData['/editor'] !== 'undefined',
     loadingAccount,
     accounts,
-    extensions: extensions
-      .filter(o => !disabledExtensions.includes(o.id))
-      .filter(o => {
-        const matches = o.manifest.matches;
-        if (Array.isArray(matches)) {
-          return matches.some(o => matchUrl(o, url!));
-        }
-        return true;
-      }),
     currentImageHostingService,
     url,
-    creatingDocument,
     currentAccountId,
-    title,
     currentRepository,
     currentAccount,
     repositories,
-    disableCreateDocument,
     locale,
+    servicesMeta,
   };
 };
 type PageStateProps = ReturnType<typeof mapStateToProps>;
@@ -73,28 +62,50 @@ type PageProps = PageStateProps & DvaRouterProps;
 
 const Page = React.memo<PageProps>(
   props => {
+    const extensionService = Container.get(IExtensionService);
     const {
-      creatingDocument,
-      title,
       repositories,
       currentAccount,
       currentRepository,
       loadingAccount,
-      extensions,
       url,
-      disableCreateDocument,
       currentImageHostingService,
       history: {
         location: { pathname },
       },
       dispatch,
-      hasUpdate,
       accounts,
+      servicesMeta,
+      hasEditor,
     } = props;
+
+    const { valid } = usePowerpack();
+
+    const extensions = useObserver(() => {
+      return Container.get(IExtensionContainer)
+        .extensions.filter(o => !extensionService.DisabledExtensionIds.includes(o.id))
+        .filter(o => {
+          if (!valid) {
+            return !o.manifest.powerpack;
+          }
+          return true;
+        })
+        .filter(o => {
+          const matches = o.manifest.matches;
+          if (Array.isArray(matches)) {
+            // eslint-disable-next-line max-nested-callbacks
+            return matches.some(o => matchUrl(o, url!));
+          }
+          return true;
+        });
+    });
+
+    const configService = Container.get(IConfigService);
+
+    const currentService = currentAccount ? servicesMeta[currentAccount.type] : null;
 
     useEffect(() => {
       if (pathname === '/') {
-        trackEvent('LoadPage', pathname);
         if (accounts.length === 0) {
           dispatch(routerRedux.push('/preference/account'));
           return;
@@ -102,41 +113,29 @@ const Page = React.memo<PageProps>(
       }
     }, [accounts.length, dispatch, pathname]);
 
-    const onTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      dispatch(
-        updateTitle({
-          title: e.target.value,
-        })
-      );
-    };
-
-    const onRepositorySelect = (repositoryId: string) => {
-      dispatch(selectRepository({ repositoryId }));
-    };
-
-    const onFilterOption = (select: any, option: React.ReactElement<any>) => {
-      const title: string = option.props.children;
-      return title.indexOf(select) !== -1;
-    };
-
-    const handleCreateDocument = () =>
-      dispatch(asyncCreateDocument.started({ pathname: props.history.location.pathname }));
-
-    const push = (path: string) => dispatch(routerRedux.push(path));
-
-    let repositoryId;
-    if (currentAccount && repositories.some(o => o.id === currentAccount.defaultRepositoryId)) {
-      repositoryId = currentAccount.defaultRepositoryId;
-    }
-
+    const onRepositorySelect = useCallback(
+      (repositoryId: string) => {
+        dispatch(selectRepository({ repositoryId }));
+      },
+      [dispatch]
+    );
+    let repositoryId: string | undefined;
     if (currentRepository) {
       repositoryId = currentRepository.id;
     }
+    useEffect(() => {
+      if (currentAccount && currentAccount.defaultRepositoryId) {
+        if (repositoryId) {
+          return;
+        }
+        onRepositorySelect(currentAccount.defaultRepositoryId);
+      }
+    }, [repositoryId, currentAccount, onRepositorySelect]);
 
-    const enableExtensions: SerializedExtensionWithId[] = extensions.filter(o => {
-      if (o.init) {
-        // @ts-ignore
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const push = (path: string) => dispatch(routerRedux.push(path));
+
+    const enableExtensions: IExtensionWithId[] = extensions.filter(o => {
+      if (o.extensionLifeCycle.init) {
         const context: InitContext = {
           locale: props.locale,
           accountInfo: {
@@ -146,31 +145,60 @@ const Page = React.memo<PageProps>(
           pathname,
           currentImageHostingService,
         };
-        // eslint-disable-next-line no-eval
-        return eval(o.init);
+        return o.extensionLifeCycle.init(context);
       }
       return true;
     });
 
     const [toolExtensions, clipExtensions] = useFilterExtensions(enableExtensions);
 
+    const header = useMemo(() => {
+      return (
+        <Header
+          pathname={pathname}
+          service={currentService}
+          currentRepository={currentRepository}
+        />
+      );
+    }, [pathname, currentService, currentRepository]);
+
+    const overlay = useMemo(() => {
+      return (
+        <Menu onClick={e => dispatch(asyncChangeAccount.started({ id: e.key }))}>
+          {props.accounts.map(o => (
+            <Menu.Item key={o.id} title={o.name}>
+              <UserItem
+                avatar={o.avatar}
+                name={o.name}
+                description={o.description}
+                icon={servicesMeta[o.type].icon}
+              />
+            </Menu.Item>
+          ))}
+        </Menu>
+      );
+    }, [dispatch, props.accounts, servicesMeta]);
+
+    const dropdown = (
+      <Dropdown overlay={overlay} placement="bottomRight">
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {!!currentAccount && (
+            <IconAvatar
+              size="small"
+              avatar={currentAccount.avatar}
+              icon={servicesMeta[currentAccount.type].icon}
+            />
+          )}
+          <CaretDownOutlined
+            style={{ fontSize: 8, color: 'rgb(140, 140, 140)', marginLeft: 6 }}
+          ></CaretDownOutlined>
+        </div>
+      </Dropdown>
+    );
+
     return (
-      <ToolContainer onClickCloseButton={() => dispatch(asyncHideTool.started())}>
-        <Section title={<FormattedMessage id="tool.title" />}>
-          <Input value={title} onChange={onTitleChange} />
-          <Button
-            className={styles.saveButton}
-            style={{ marginTop: 16 }}
-            size="large"
-            type="primary"
-            loading={creatingDocument}
-            disabled={disableCreateDocument}
-            onClick={handleCreateDocument}
-            block
-          >
-            {<FormattedMessage id="tool.save" defaultMessage="Save Content" />}
-          </Button>
-        </Section>
+      <ToolContainer onClickCloseButton={Container.get(IContentScriptService).hide}>
+        {header}
         <ToolExtensions
           extensions={toolExtensions}
           onClick={extension =>
@@ -183,29 +211,26 @@ const Page = React.memo<PageProps>(
           }
         />
         <ClipExtension
+          hasEditor={hasEditor}
           extensions={clipExtensions}
           onClick={router => push(router)}
           pathname={pathname}
         />
-        <Section title={<FormattedMessage id="tool.repository"></FormattedMessage>}>
-          <Select
-            loading={loadingAccount}
+        <Section className={styles.section} title={<FormattedMessage id="tool.repository" />}>
+          <RepositorySelect
             disabled={loadingAccount}
+            loading={loadingAccount}
+            repositories={repositories}
             onSelect={onRepositorySelect}
             style={{ width: '100%' }}
-            showSearch
-            optionFilterProp="children"
-            filterOption={onFilterOption}
             dropdownMatchSelectWidth={true}
             value={repositoryId}
-          >
-            {repositorySelectOptions(repositories)}
-          </Select>
+          />
         </Section>
-        <Section line>
+        <Section>
           <div className={styles.toolbar}>
             <Button
-              className={`${styles.toolbarButton} `}
+              className={styles.toolbarButton}
               onClick={() => {
                 if (pathname.startsWith('/preference')) {
                   push('/');
@@ -214,21 +239,15 @@ const Page = React.memo<PageProps>(
                 }
               }}
             >
-              <Badge dot={hasUpdate}>
-                <Icon type="setting" style={{ fontSize: 18 }} />
-              </Badge>
+              <Observer>
+                {() => (
+                  <Badge dot={!configService.isLatestVersion}>
+                    <SettingOutlined style={{ fontSize: 18 }} />
+                  </Badge>
+                )}
+              </Observer>
             </Button>
-            <Select
-              value={props.currentAccountId}
-              style={{ width: '75px' }}
-              onSelect={(value: string) => dispatch(asyncChangeAccount.started({ id: value }))}
-            >
-              {props.accounts.map(o => (
-                <Select.Option key={o.id || '1'}>
-                  <Avatar size="small" src={o.avatar} />
-                </Select.Option>
-              ))}
-            </Select>
+            {dropdown}
           </div>
         </Section>
       </ToolContainer>
@@ -236,28 +255,26 @@ const Page = React.memo<PageProps>(
   },
   (prevProps: PageProps, nextProps: PageProps) => {
     const selector = ({
-      creatingDocument,
       repositories,
       currentAccount,
       currentRepository,
-      title,
       history,
       loadingAccount,
       locale,
-      extensions,
-      hasUpdate,
+      servicesMeta,
+      accounts,
+      hasEditor,
     }: PageProps) => {
       return {
+        hasEditor,
         loadingAccount,
         currentRepository,
-        creatingDocument,
         repositories,
         currentAccount,
-        title,
         pathname: history.location.pathname,
         locale,
-        extensions,
-        hasUpdate,
+        servicesMeta,
+        accounts,
       };
     };
     return isEqual(selector(prevProps), selector(nextProps));

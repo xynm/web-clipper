@@ -1,18 +1,17 @@
-import * as React from 'react';
-import { Divider } from 'antd';
-import styles from './index.scss';
+import React from 'react';
+import styles from './index.less';
 
 interface Props {
   title?: string | React.ReactNode;
-  line?: boolean;
+  className?: string;
 }
 
-const Section: React.FC<Props> = ({ line = false, title, children }) => (
-  <div className={styles.section}>
-    {line && <Divider style={{ marginBottom: 16 }} />}
-    {title && <h1 className={styles.sectionTitle}>{title}</h1>}
-    {children}
-  </div>
-);
-
+const Section: React.FC<Props> = ({ title, children, className }) => {
+  return (
+    <div className={className}>
+      {title && <h1 className={styles.sectionTitle}>{title}</h1>}
+      {children}
+    </div>
+  );
+};
 export default Section;

@@ -1,6 +1,6 @@
+import { IExtensionWithId } from './../extensions/common';
 import { ImageHosting, GlobalStore } from '@/common/types';
 import { PreferenceStorage } from 'common/storage/interface';
-import { SerializedExtensionWithId } from '@web-clipper/extensions';
 import { actionCreatorFactory } from 'dva-model-creator';
 
 const actionCreator = actionCreatorFactory('userPreference');
@@ -24,33 +24,20 @@ export const asyncSetEditorLiveRendering = actionCreator.async<
   void
 >('ASYNC_SET_EDITOR_LIVE_RENDERING');
 
-export const asyncSetShowLineNumber = actionCreator.async<
+export const asyncSetIconColor = actionCreator.async<
   {
-    value: boolean;
+    value: 'dark' | 'light' | 'auto';
   },
   {
-    value: boolean;
-  },
-  void
->('ASYNC_SET_SHOW_LINE_NUMBER');
-
-export const asyncFetchRemoteConfig = actionCreator.async<
-  void,
-  {
-    iconfont: string;
-    icons: string[];
+    value: 'dark' | 'light' | 'auto';
   },
   void
->('asyncFetchRemoteConfig');
-
-export const asyncHideTool = actionCreator.async<void, void, void>('ASYNC_HIDE_TOOL');
-
-export const asyncRemoveTool = actionCreator.async<void, void, void>('ASYNC_REMOVE_TOOL');
+>('ASYNC_SET_ICON_COLOR');
 
 export const asyncRunExtension = actionCreator.async<
   {
     pathname: string;
-    extension: SerializedExtensionWithId;
+    extension: IExtensionWithId;
   },
   {
     result: unknown;

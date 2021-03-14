@@ -1,14 +1,18 @@
-import React, { useEffect } from 'react';
-import { Form, Modal, Select, Icon } from 'antd';
-import { FormComponentProps } from 'antd/lib/form';
-import * as styles from './index.scss';
+import React, { useMemo, useEffect } from 'react';
+import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Form } from '@ant-design/compatible';
+import '@ant-design/compatible/assets/index.less';
+import { Modal, Select } from 'antd';
+import { FormComponentProps } from '@ant-design/compatible/lib/form';
+import styles from './index.less';
 import { ImageHostingServiceMeta } from 'common/backend';
-import repositorySelectOptions from 'components/repositorySelectOptions';
 import { AccountPreference, UserPreferenceStore, ImageHosting } from '@/common/types';
 import { FormattedMessage } from 'react-intl';
 import ImageHostingSelect from '@/components/ImageHostingSelect';
 import useFilterImageHostingServices from '@/common/hooks/useFilterImageHostingServices';
 import useVerifiedAccount from '@/common/hooks/useVerifiedAccount';
+import RepositorySelect from '@/components/RepositorySelect';
+import { BUILT_IN_IMAGE_HOSTING_ID } from '@/common/backend/imageHosting/interface';
 
 type PageOwnProps = {
   imageHostingServicesMeta: {
@@ -19,7 +23,7 @@ type PageOwnProps = {
   currentAccount: AccountPreference;
   visible: boolean;
   onCancel(): void;
-  onEdit(id: string): void;
+  onEdit(oldId: string, userInfo: any, newId: string): void;
 };
 type PageProps = PageOwnProps & FormComponentProps;
 
@@ -27,7 +31,7 @@ const ModalTitle = () => (
   <div className={styles.modalTitle}>
     <FormattedMessage id="preference.accountList.addAccount" defaultMessage="Add Account" />
     <a href={'https://www.yuque.com/yuqueclipper/help_cn/bind_account'} target="_blank">
-      <Icon type="question-circle" />
+      <QuestionCircleOutlined />
     </a>
   </div>
 );
@@ -44,7 +48,8 @@ const Page: React.FC<PageProps> = ({
   imageHostingServicesMeta,
 }) => {
   const {
-    accountStatus: { verified, repositories },
+    type,
+    accountStatus: { verified, repositories, userInfo, id },
     verifyAccount,
     serviceForm,
     verifying,
@@ -55,13 +60,21 @@ const Page: React.FC<PageProps> = ({
   });
 
   useEffect(() => {
-    verifyAccount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    verifyAccount(currentAccount);
+  }, [currentAccount, verifyAccount]);
+
+  const imageHostingWithBuiltIn = useMemo(() => {
+    const res = [...imageHosting];
+    const meta = imageHostingServicesMeta[type];
+    if (meta?.builtIn) {
+      res.push({ type, info: {}, id: BUILT_IN_IMAGE_HOSTING_ID, remark: meta.builtInRemark });
+    }
+    return res;
+  }, [imageHosting, imageHostingServicesMeta, type]);
 
   const supportedImageHostingServices = useFilterImageHostingServices({
     backendServiceType: currentAccount.type,
-    imageHostingServices: imageHosting,
+    imageHostingServices: imageHostingWithBuiltIn,
     imageHostingServicesMap: imageHostingServicesMeta,
   });
 
@@ -74,7 +87,7 @@ const Page: React.FC<PageProps> = ({
   return (
     <Modal
       visible={visible}
-      title={<ModalTitle></ModalTitle>}
+      title={<ModalTitle />}
       okText={okText}
       okType="primary"
       okButtonProps={{
@@ -82,7 +95,7 @@ const Page: React.FC<PageProps> = ({
         disabled: !verified,
       }}
       onCancel={onCancel}
-      onOk={() => onEdit(currentAccount.id)}
+      onOk={() => onEdit(currentAccount.id, userInfo, id!)}
     >
       <Form labelCol={{ span: 7, offset: 0 }} wrapperCol={{ span: 17 }}>
         <Form.Item
@@ -110,9 +123,11 @@ const Page: React.FC<PageProps> = ({
           {getFieldDecorator('defaultRepositoryId', {
             initialValue: currentAccount.defaultRepositoryId,
           })(
-            <Select allowClear disabled={!verified}>
-              {repositorySelectOptions(repositories)}
-            </Select>
+            <RepositorySelect
+              disabled={!verified || verifying}
+              loading={verifying}
+              repositories={repositories}
+            />
           )}
         </Form.Item>
         <Form.Item

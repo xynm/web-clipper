@@ -1,4 +1,4 @@
-import { TextExtension } from '@web-clipper/extensions';
+import { TextExtension } from '@/extensions/common';
 
 export default new TextExtension(
   {
@@ -12,9 +12,14 @@ export default new TextExtension(
   },
   {
     run: async context => {
-      const { turndown, document, Readability } = context;
+      const { turndown, document, Readability, $ } = context;
       let documentClone = document.cloneNode(true);
-      let article = new Readability(documentClone).parse();
+      $(documentClone)
+        .find('#skPlayer')
+        .remove();
+      let article = new Readability(documentClone, {
+        keepClasses: true,
+      }).parse();
       return turndown.turndown(article.content);
     },
   }

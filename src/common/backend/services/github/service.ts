@@ -4,10 +4,13 @@ import {
   GithubUserInfoResponse,
   GithubRepositoryResponse,
   GithubRepository,
+  GithubLabel,
+  GithubCreateDocumentRequest,
 } from './interface';
-import { DocumentService, Repository, CreateDocumentRequest } from '../../index';
+import { DocumentService } from '../../index';
 import axios, { AxiosInstance } from 'axios';
 import md5 from '@web-clipper/shared/lib/md5';
+import { stringify } from 'qs';
 
 const PAGE_LIMIT = 100;
 
@@ -51,51 +54,56 @@ export default class GithubDocumentService implements DocumentService {
     };
   };
 
-  getRepositories = async () => {
+  getRepositories = async (): Promise<GithubRepository[]> => {
     let page = 1;
-    let foo = await this.getGithubRepositories(page);
+    let foo = await this.getGithubRepositories({ page, visibility: this.config.visibility });
     let result: GithubRepository[] = [];
     result = result.concat(foo);
     while (foo.length === PAGE_LIMIT) {
       page++;
-      foo = await this.getGithubRepositories(page);
+      foo = await this.getGithubRepositories({ page, visibility: this.config.visibility });
       result = result.concat(foo);
     }
     this.repositories = result;
-    return result.map(
-      ({ id, name, groupId, groupName }): Repository => ({
-        id,
-        name,
-        groupId,
-        groupName,
-      })
-    );
+    return result;
   };
 
-  createDocument = async (info: CreateDocumentRequest): Promise<CompleteStatus> => {
+  createDocument = async (info: GithubCreateDocumentRequest): Promise<CompleteStatus> => {
     if (!this.repositories) {
       this.getRepositories();
     }
-    const { content: body, title, repositoryId } = info;
+    const { content: body, title, repositoryId, labels } = info;
     const repository = this.repositories.find(o => o.id === repositoryId);
     if (!repository) {
       throw new Error('can not find repository');
     }
+
     const response = await this.request.post<{
       html_url: string;
       id: number;
     }>(`/repos/${repository.namespace}/issues`, {
       title,
       body,
+      labels,
     });
     return {
       href: response.data.html_url,
     };
   };
 
-  private getGithubRepositories = async (page: number) => {
+  getRepoLabels = async (repo: GithubRepository): Promise<GithubLabel[]> => {
+    return (await this.request.get<GithubLabel[]>(`/repos/${repo.namespace}/labels`)).data;
+  };
+
+  private getGithubRepositories = async ({
+    page,
+    visibility,
+  }: {
+    page: number;
+    visibility: string;
+  }) => {
     const response = await this.request.get<GithubRepositoryResponse[]>(
-      `user/repos?per_page=${PAGE_LIMIT}&page=${page}`
+      `user/repos?${stringify({ page, per_page: PAGE_LIMIT, visibility })}`
     );
     const repositories = response.data;
     return repositories.map(

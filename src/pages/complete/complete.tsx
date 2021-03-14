@@ -1,13 +1,14 @@
 import * as React from 'react';
-import { useSelector, useDispatch } from 'dva';
+import { useSelector } from 'dva';
 import { ToolContainer } from 'components/container';
-import * as styles from './complete.less';
+import styles from './complete.less';
 import { Button } from 'antd';
 import { GlobalStore } from '@/common/types';
 import Section from 'components/section';
-import { asyncRemoveTool } from '@/actions/userPreference';
 import { FormattedMessage } from 'react-intl';
 import Share from '@/components/share';
+import Container from 'typedi';
+import { IContentScriptService } from '@/service/common/contentScript';
 
 const Page: React.FC = () => {
   const { servicesMeta, currentAccount, completeStatus, createDocumentRequest } = useSelector(
@@ -25,9 +26,8 @@ const Page: React.FC = () => {
       };
     }
   );
-  const dispatch = useDispatch();
   function closeTool() {
-    dispatch(asyncRemoveTool.started());
+    Container.get(IContentScriptService).remove();
   }
   const renderError = (
     <ToolContainer onClickCloseButton={closeTool}>
@@ -36,7 +36,7 @@ const Page: React.FC = () => {
       </a>
     </ToolContainer>
   );
-  if (!completeStatus || !currentAccount) {
+  if (!currentAccount) {
     return renderError;
   }
   const currentService = servicesMeta[currentAccount.type];
@@ -45,17 +45,23 @@ const Page: React.FC = () => {
   }
   const { name, complete: Complete } = currentService;
   return (
-    <ToolContainer onClickCloseButton={closeTool}>
+    <ToolContainer onClickCloseButton={closeTool} onClickMask={closeTool}>
       <Section title={<FormattedMessage id="page.complete.success" defaultMessage="Success" />}>
-        <a href={completeStatus.href} target="_blank">
-          <Button className={styles.jump} size="large" type="primary" block>
-            <FormattedMessage
-              id="page.complete.message"
-              defaultMessage="Go to {name}"
-              values={{ name: <span>{name}</span> }}
-            />
+        {completeStatus?.href ? (
+          <a href={completeStatus.href} target="_blank">
+            <Button className={styles.jump} size="large" type="primary" block>
+              <FormattedMessage
+                id="page.complete.message"
+                defaultMessage="Go to {name}"
+                values={{ name: <span>{name}</span> }}
+              />
+            </Button>
+          </a>
+        ) : (
+          <Button className={styles.jump} size="large" type="primary" block onClick={closeTool}>
+            <FormattedMessage id="page.complete.close" defaultMessage="Close Web Clipper" />
           </Button>
-        </a>
+        )}
       </Section>
       {Complete && <Complete status={completeStatus}> </Complete>}
       <Section title={<FormattedMessage id="page.complete.share" defaultMessage="Share" />}>

@@ -1,11 +1,17 @@
 import { LOCAL_USER_PREFERENCE_LOCALE_KEY } from '@/common/modelTypes/userPreference';
 import { createIntlCache, createIntl, IntlShape, MessageDescriptor } from 'react-intl';
-import { LocaleModel } from './interface';
+import { LocaleModel, removeEmptyKeys } from './interface';
 import { localStorageService } from '@/common/chrome/storage';
 
 const context = require.context('./data', true, /\.[t|j]s$/);
+
 export const locales = context.keys().map(key => {
-  return context(key).default as LocaleModel;
+  const model = context(key).default as LocaleModel;
+  const en = context('./en-US.ts').default as LocaleModel;
+  return {
+    ...model,
+    messages: removeEmptyKeys(model.messages, en.messages),
+  };
 });
 
 export const localesMap = locales.reduce((p, l) => {
@@ -39,11 +45,11 @@ class LocaleService {
     this.intl = intl;
   }
 
-  format(descriptor: MessageDescriptor): string {
+  format(descriptor: MessageDescriptor, values?: Record<string, any>): string {
     if (!this.intl) {
       throw Error('Should init intl before use');
     }
-    return this.intl.formatMessage(descriptor);
+    return this.intl.formatMessage(descriptor, values);
   }
 }
 

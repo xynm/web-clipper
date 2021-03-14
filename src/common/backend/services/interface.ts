@@ -1,17 +1,18 @@
 export interface CreateDocumentRequest {
   title: string;
   content: string;
+  url?: string;
   repositoryId: string;
 }
 
 export interface CompleteStatus {
-  href: string;
+  href?: string;
 }
 
 export interface UserInfo {
   name: string;
   avatar: string;
-  homePage: string;
+  homePage?: string;
   description?: string;
 }
 
@@ -32,6 +33,7 @@ export interface Repository {
    * 团队 名称
    */
   groupName: string;
+  disabled?: boolean;
 }
 
 export interface ServiceMeta {
@@ -61,6 +63,8 @@ export interface ServiceMeta {
   form?: any;
   complete?: any;
   oauthUrl?: string;
+  headerForm?: any;
+  permission?: chrome.permissions.Permissions;
 }
 
 export interface DocumentService<T = any> {
@@ -68,7 +72,7 @@ export interface DocumentService<T = any> {
 
   getRepositories(): Promise<Repository[]>;
 
-  createDocument(request: CreateDocumentRequest): Promise<CompleteStatus>;
+  createDocument(request: CreateDocumentRequest): Promise<CompleteStatus | void>;
 
   getUserInfo(): Promise<UserInfo>;
 
