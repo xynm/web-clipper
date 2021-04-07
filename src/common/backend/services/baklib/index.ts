@@ -16,9 +16,6 @@ export default (): ServiceMeta => {
     service: Service,
     form: Form,
     headerForm,
-    homePage: 'https://www.baklib-free.com/',
-    permission: {
-      origins: ['https://www.baklib-free.com/*'],
-    },
+    homePage: 'https://www.baklib.com/',
   };
 };
